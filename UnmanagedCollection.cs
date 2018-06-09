@@ -51,7 +51,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         AssureSize(Count + unmanagedCollection.Count);
 
         for (int i = 0; i < unmanagedCollection.Count; i++)
-            data_[Count+i] = unmanagedCollection.data_[i];
+            data_[Count + i] = unmanagedCollection.data_[i];
 
         Count += unmanagedCollection.Count;
     }
@@ -61,7 +61,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         AssureSize(Count + collection.Count);
 
         for (int i = 0; i < collection.Count; i++)
-            data_[Count+i] = collection[i];
+            data_[Count + i] = collection[i];
 
         Count += collection.Count;
     }
@@ -69,7 +69,12 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
     private void AssureSize(int size)
     {
         if (size > dataSizeInElements_)
-            GrowMemoryBlock(size);
+        {
+            var nextAccomodatingSize = GetNextBlockSize();
+            while (nextAccomodatingSize < size)
+                nextAccomodatingSize = GetNextBlockSize();
+            GrowMemoryBlock(nextAccomodatingSize);
+        }
     }
 
     private int GetNextBlockSize()
