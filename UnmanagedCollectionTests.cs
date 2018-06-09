@@ -53,6 +53,18 @@ public static class UnmanagedCollectionTests
         uc.Add(new TestStruct(1337,42));
         Console.WriteLine($"uc elements: {String.Join(",", uc)}");
 
+        const int alot = 2 << 5;
+        Console.WriteLine($"Adding a {alot} elements");
+        for (int i = 0; i < alot; i++)
+        {
+            uc.Add(new TestStruct(i,i));
+        }
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.WriteLine("Clearing");
+        uc.Clear();
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
         Console.ReadKey();
     }
 }
