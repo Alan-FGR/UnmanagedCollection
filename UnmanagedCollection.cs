@@ -21,17 +21,17 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
     private readonly float overflowMult_;
     private readonly int elementSize_;
 
-    public UnmanagedCollection(int startBufferSize = 16, float overflowMult = 1.25f)
+    public UnmanagedCollection(int startingBufferSize = 8, float overflowMult = 1.5f)
     {
-        if ((int)(startBufferSize * overflowMult) < startBufferSize + 1)
+        if ((int)(startingBufferSize * overflowMult) < startingBufferSize + 1)
             throw new ArgumentOutOfRangeException("Overflow multiplier doesn't increase size");
 
         overflowMult_ = overflowMult;
         elementSize_ = Marshal.SizeOf<T>();
-        dataSizeInElements_ = startBufferSize;
+        dataSizeInElements_ = startingBufferSize;
         data_ = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
     }
-
+    
     ~UnmanagedCollection()
     {
         Marshal.FreeHGlobal((IntPtr)data_);
@@ -128,6 +128,12 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
 
         for (int i = 0; i < Count; i++)
             array[arrayIndex + i] = data_[i];
+    }
+
+    public void CopyTo(IntPtr memAddr)
+    {
+        // I also like to live dangerously *trollface*
+        Buffer.MemoryCopy(data_, (void*)memAddr, DataSizeInBytes, DataSizeInBytes);
     }
 
     public bool Remove(T item)
