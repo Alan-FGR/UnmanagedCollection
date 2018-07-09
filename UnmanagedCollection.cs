@@ -8,6 +8,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
     // public getters
     public bool IsReadOnly => false;
     public int DataSizeInBytes => dataSizeInElements_ * elementSize_;
+    public int UsedSizeInBytes => Count * elementSize_;
     public IntPtr Data => (IntPtr)data_;
 
     // public getter with setter
@@ -27,7 +28,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
             throw new ArgumentOutOfRangeException("Overflow multiplier doesn't increase size");
 
         overflowMult_ = overflowMult;
-        elementSize_ = Marshal.SizeOf<T>();
+        elementSize_ = sizeof(T);
         dataSizeInElements_ = startingBufferSize;
         data_ = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
     }
@@ -126,14 +127,15 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         if (arrayIndex + Count > array.Length)
             throw new IndexOutOfRangeException("Array to copy to doesn't have enough space");
 
-        for (int i = 0; i < Count; i++)
-            array[arrayIndex + i] = data_[i];
+        fixed (T* manArrDataPtr = &array[arrayIndex])
+        {
+            Buffer.MemoryCopy(data_, manArrDataPtr, UsedSizeInBytes, UsedSizeInBytes);
+        }
     }
 
     public void CopyTo(IntPtr memAddr)
     {
-        // I also like to live dangerously *trollface*
-        Buffer.MemoryCopy(data_, (void*)memAddr, DataSizeInBytes, DataSizeInBytes);
+        Buffer.MemoryCopy(data_, (void*)memAddr, UsedSizeInBytes, UsedSizeInBytes);
     }
 
     public bool Remove(T item)

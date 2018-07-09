@@ -65,6 +65,45 @@ public static class UnmanagedCollectionTests
         uc.Clear();
         Console.WriteLine($"uc elements: {String.Join(",", uc)}");
 
+        //testing new copy optimization with primitives
+        Console.WriteLine("Copying primitive types to managed array");
+        TestCopy<sbyte>();
+        TestCopy<short>();
+        TestCopy<ushort>();
+        TestCopy<int>();
+        TestCopy<uint>();
+        TestCopy<long>();
+        TestCopy<ulong>();
+        TestCopy<float>();
+        TestCopy<double>();
+        TestCopy<decimal>();
+        TestCopy<char>();
+        TestCopy<bool>();
+        
         Console.ReadKey();
     }
+
+    static unsafe void TestCopy<T>() where T : unmanaged
+    {
+        var pArr = new T[5];
+        var uCol = new UnmanagedCollection<T>();
+
+        uCol.Add(ConvertNumber<T>(0));
+        uCol.Add(ConvertNumber<T>(1));
+        uCol.Add(ConvertNumber<T>(2));
+        uCol.Add(ConvertNumber<T>(3));
+        uCol.Add(ConvertNumber<T>(4));
+
+        uCol.CopyTo(pArr,0);
+        
+        string ucs = String.Join(",", uCol); //shitty equality test todo fix
+        string mas = string.Join(",", pArr);
+        Console.WriteLine($"{pArr[0].GetType()} passed: {ucs == mas}, {ucs}, {mas}");
+    }
+
+    static T ConvertNumber<T>(object t)
+    {
+        return (T)Convert.ChangeType(t, typeof(T));
+    }
+
 }
