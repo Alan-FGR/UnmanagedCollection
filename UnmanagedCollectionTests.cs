@@ -67,6 +67,7 @@ public static class UnmanagedCollectionTests
 
         //testing new copy optimization with primitives
         Console.WriteLine("Copying primitive types to managed array");
+        TestCopy<byte>();
         TestCopy<sbyte>();
         TestCopy<short>();
         TestCopy<ushort>();
