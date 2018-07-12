@@ -3,20 +3,19 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
+public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, IDisposable where T : unmanaged
 {
     // public getters
     public bool IsReadOnly => false;
     public int DataSizeInBytes => dataSizeInElements_ * elementSize_;
     public int UsedSizeInBytes => Count * elementSize_;
-    public IntPtr Data => (IntPtr)data_;
 
     // public getter with setter
+    public T* Data { get; private set; }
     public int Count { get; private set; } = 0;
 
     // private fields
     private int dataSizeInElements_;
-    private T* data_;
 
     // readonly
     private readonly float overflowMult_;
@@ -30,12 +29,18 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         overflowMult_ = overflowMult;
         elementSize_ = sizeof(T);
         dataSizeInElements_ = startingBufferSize;
-        data_ = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
+        Data = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
     }
     
     ~UnmanagedCollection()
     {
-        Marshal.FreeHGlobal((IntPtr)data_);
+        Marshal.FreeHGlobal((IntPtr)Data);
+    }
+
+    public void Dispose()
+    {
+        Marshal.FreeHGlobal((IntPtr)Data);
+        GC.SuppressFinalize(this);
     }
 
     public void Add(T item)
@@ -43,7 +48,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         if (Count + 1 > dataSizeInElements_)
             GrowMemoryBlock(GetNextBlockSize());
 
-        data_[Count] = item;
+        Data[Count] = item;
         Count++;
     }
 
@@ -52,7 +57,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         AssureSize(Count + unmanagedCollection.Count);
 
         for (int i = 0; i < unmanagedCollection.Count; i++)
-            data_[Count + i] = unmanagedCollection.data_[i];
+            Data[Count + i] = unmanagedCollection.Data[i];
 
         Count += unmanagedCollection.Count;
     }
@@ -62,7 +67,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         AssureSize(Count + collection.Count);
 
         for (int i = 0; i < collection.Count; i++)
-            data_[Count + i] = collection[i];
+            Data[Count + i] = collection[i];
 
         Count += collection.Count;
     }
@@ -87,10 +92,10 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
     {
         var newDataSize = elementSize_ * newElementCount;
         var newData = (T*)Marshal.AllocHGlobal(newDataSize);
-        Buffer.MemoryCopy(data_, newData, DataSizeInBytes, DataSizeInBytes);
-        Marshal.FreeHGlobal((IntPtr)data_);
+        Buffer.MemoryCopy(Data, newData, DataSizeInBytes, DataSizeInBytes);
+        Marshal.FreeHGlobal((IntPtr)Data);
         dataSizeInElements_ = newElementCount;
-        data_ = newData;
+        Data = newData;
     }
 
     public void Clear()
@@ -98,15 +103,12 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         Count = 0;
     }
 
-    public T GetUnsafe(int index)
-    {
-        return data_[index];
-    }
+    public T this[int index] => Data[index];
 
     public IEnumerator<T> GetEnumerator()
     {
         for (int i = 0; i < Count; i++)
-            yield return GetUnsafe(i);
+            yield return this[i];
     }
 
     IEnumerator IEnumerable.GetEnumerator()
@@ -114,10 +116,16 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
         return GetEnumerator();
     }
 
+    public unsafe void FastForeach(Action<T> loopAction)
+    {
+        for (int i = 0; i < Count; i++)
+            loopAction(Data[i]);
+    }
+
     public bool Contains(T item)
     {
         for (int i = 0; i < Count; i++)
-            if (data_[i].Equals(item))
+            if (Data[i].Equals(item))
                 return true;
         return false;
     }
@@ -129,13 +137,13 @@ public unsafe class UnmanagedCollection<T> : ICollection<T> where T : unmanaged
 
         fixed (T* manArrDataPtr = &array[arrayIndex])
         {
-            Buffer.MemoryCopy(data_, manArrDataPtr, UsedSizeInBytes, UsedSizeInBytes);
+            Buffer.MemoryCopy(Data, manArrDataPtr, UsedSizeInBytes, UsedSizeInBytes);
         }
     }
 
     public void CopyTo(IntPtr memAddr)
     {
-        Buffer.MemoryCopy(data_, (void*)memAddr, UsedSizeInBytes, UsedSizeInBytes);
+        Buffer.MemoryCopy(Data, (void*)memAddr, UsedSizeInBytes, UsedSizeInBytes);
     }
 
     public bool Remove(T item)
