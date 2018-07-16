@@ -7,8 +7,15 @@ public static class UnmanagedCollectionTests
 {
     static Stopwatch sw_ = new Stopwatch();
     static Dictionary<string, List<long>> results_ = new Dictionary<string, List<long>>();
-    static void Measure<T>(string text, Func<T> func)
+    static void Measure<T>(string text, bool warmup, Func<T> func)
     {
+        if (warmup)
+        {
+            Console.WriteLine($"Warming up... ");
+            func.Invoke();
+            return;
+        }
+
         Console.Write($"Measuring... ");
 
         sw_.Restart();
@@ -103,7 +110,8 @@ public static class UnmanagedCollectionTests
 
 
         //performance tests
-        for (int li = 0; li < 8; li++)
+        foreach (var warmup in new []{true,false})
+        for (int li = 0; li < 4; li++)
         {
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -113,21 +121,21 @@ public static class UnmanagedCollectionTests
             var ucPerf = new UnmanagedCollection<TestStruct>(4, 2);
             var lsPerf = new List<TestStruct>();
 
-            Measure($"Add {qty} to UnmanagedCollection", () =>
+            Measure($"Add {qty} to UnmanagedCollection", warmup, () =>
             {
                 for (int i = 0; i < qty; i++)
                     ucPerf.Add(new TestStruct());
                 return ucPerf.Count;
             });
 
-            Measure($"Add {qty} to List", () =>
+            Measure($"Add {qty} to List", warmup, () =>
             {
                 for (int i = 0; i < qty; i++)
                     lsPerf.Add(new TestStruct());
                 return lsPerf.Count;
             });
 
-            Measure($"Foreach UnmanagedCollection", () =>
+            Measure($"Foreach UnmanagedCollection", warmup, () =>
             {
                 foreach (TestStruct testStruct in ucPerf)
                 {
@@ -137,7 +145,7 @@ public static class UnmanagedCollectionTests
                 return ucPerf.Count;
             });
 
-            Measure($"Fast Foreach UnmanagedCollection", () =>
+            Measure($"Fast Foreach UnmanagedCollection", warmup, () =>
             {
                 unsafe
                 {
@@ -149,7 +157,7 @@ public static class UnmanagedCollectionTests
                 }
             });
 
-            Measure($"Foreach List", () =>
+            Measure($"Foreach List", warmup, () =>
             {
                 foreach (TestStruct testStruct in lsPerf)
                 {
@@ -159,7 +167,7 @@ public static class UnmanagedCollectionTests
                 return lsPerf.Count;
             });
 
-            Measure($"For UnmanagedCollection", () =>
+            Measure($"For UnmanagedCollection", warmup, () =>
             {
                 for (var i = 0; i < ucPerf.Count; i++)
                 {
@@ -169,7 +177,7 @@ public static class UnmanagedCollectionTests
                 return ucPerf.Count;
             });
 
-            Measure($"For Direct Access UnmanagedCollection", () =>
+            Measure($"For Direct Access UnmanagedCollection", warmup, () =>
             {
                 unsafe
                 {
@@ -182,7 +190,7 @@ public static class UnmanagedCollectionTests
                 }
             });
 
-            Measure($"For List", () =>
+            Measure($"For List", warmup, () =>
             {
                 for (var i = 0; i < lsPerf.Count; i++)
                 {

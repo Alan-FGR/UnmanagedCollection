@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-
+                                                            // todo: impl IList
 public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, IDisposable where T : unmanaged
 {
     // public getters
@@ -43,6 +44,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
         GC.SuppressFinalize(this);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(T item)
     {
         if (Count + 1 > dataSizeInElements_)
@@ -72,6 +74,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
         Count += collection.Count;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void AssureSize(int size)
     {
         if (size > dataSizeInElements_)
@@ -83,11 +86,13 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetNextBlockSize()
     {
         return (int)(dataSizeInElements_ * overflowMult_);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void GrowMemoryBlock(int newElementCount)
     {
         var newDataSize = elementSize_ * newElementCount;
@@ -115,7 +120,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
     {
         return GetEnumerator();
     }
-
+    
     public unsafe void FastForeach(Action<T> loopAction)
     {
         for (int i = 0; i < Count; i++)
