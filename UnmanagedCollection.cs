@@ -108,7 +108,11 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
         Count = 0;
     }
 
-    public T this[int index] => Data[index];
+    public T this[int index]
+    {
+        set => Data[index] = value;
+        get => Data[index];
+    }
 
     public IEnumerator<T> GetEnumerator()
     {
