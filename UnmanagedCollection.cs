@@ -13,6 +13,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
 
     // public getter with setter
     public T* Data { get; private set; }
+    public IntPtr DataIntPtr => (IntPtr) Data;
     public int Count { get; private set; } = 0;
 
     // private fields
