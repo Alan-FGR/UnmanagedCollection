@@ -3,3 +3,5 @@
 ################################################################################
 
 /.vs/UnmanagedCollection/v15
+/UnmanagedCollection/bin
+/UnmanagedCollection/obj

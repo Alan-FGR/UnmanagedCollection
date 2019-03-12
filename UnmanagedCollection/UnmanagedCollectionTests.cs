@@ -46,7 +46,7 @@ public static class UnmanagedCollectionTests
         }
     }
 
-    public static void Run()
+    public static void Main()
     {
         Console.WriteLine("Creating");
         var uc = new UnmanagedCollection<TestStruct>();
@@ -65,6 +65,26 @@ public static class UnmanagedCollectionTests
         otherUc.AddRange(new[] { new TestStruct(7, 8), new TestStruct(9, 10) });
         uc.AddRange(otherUc);
         Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.WriteLine("Removing At 1");
+        uc.RemoveAt(1);
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.WriteLine("Removing At Fast 1");
+        uc.RemoveAtFast(1);
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.WriteLine($"Index Of 9&10: {uc.IndexOf(new TestStruct(9, 10))}");
+
+        Console.WriteLine("Removing 9&10");
+        uc.Remove(new TestStruct(9, 10));
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.WriteLine("Inserting 9&10 At 1");
+        uc.Insert(1, new TestStruct(9, 10));
+        Console.WriteLine($"uc elements: {String.Join(",", uc)}");
+
+        Console.ReadKey();
 
         Console.WriteLine("Copying to managed array");
         var mArr = new TestStruct[5];

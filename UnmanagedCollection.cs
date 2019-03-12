@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-                                                            // todo: impl IList
-public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, IDisposable where T : unmanaged
+
+public unsafe class UnmanagedCollection<T> : IList<T>, IDisposable where T : unmanaged
 {
     // public getters
     public bool IsReadOnly => false;
@@ -13,36 +13,42 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
 
     // public getter with setter
     public T* Data { get; private set; }
-    public IntPtr DataIntPtr => (IntPtr) Data;
+    public IntPtr DataIntPtr => (IntPtr)Data;
     public int Count { get; private set; } = 0;
 
     // private fields
     private int dataSizeInElements_;
 
-    // readonly
-    private readonly float overflowMult_;
-    private readonly int elementSize_;
+    // readonly fields
+    #if DEBUG
+    readonly
+        #endif
+        private float overflowMult_;
+    #if DEBUG
+    readonly
+        #endif
+        private int elementSize_;
 
     public UnmanagedCollection(int startingBufferSize = 8, float overflowMult = 1.5f)
     {
-        if ((int)(startingBufferSize * overflowMult) < startingBufferSize + 1)
-            throw new ArgumentOutOfRangeException("Overflow multiplier doesn't increase size");
+        if ((int)(startingBufferSize * overflowMult) <= startingBufferSize)
+            throw new ArithmeticException("Overflow multiplier doesn't increase size. Try increasing it.");
 
         overflowMult_ = overflowMult;
         elementSize_ = sizeof(T);
         dataSizeInElements_ = startingBufferSize;
         Data = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
     }
-    
-    ~UnmanagedCollection()
-    {
-        Marshal.FreeHGlobal((IntPtr)Data);
-    }
 
     public void Dispose()
     {
         Marshal.FreeHGlobal((IntPtr)Data);
         GC.SuppressFinalize(this);
+    }
+
+    ~UnmanagedCollection()
+    {
+        Marshal.FreeHGlobal((IntPtr)Data);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -76,12 +82,12 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void AssureSize(int size)
+    private void AssureSize(int sizeInElements)
     {
-        if (size > dataSizeInElements_)
+        if (sizeInElements > dataSizeInElements_)
         {
             var nextAccomodatingSize = GetNextBlockSize();
-            while (nextAccomodatingSize < size)
+            while (nextAccomodatingSize < sizeInElements)
                 nextAccomodatingSize = GetNextBlockSize();
             GrowMemoryBlock(nextAccomodatingSize);
         }
@@ -109,6 +115,38 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
         Count = 0;
     }
 
+    public int IndexOf(T item)
+    {
+        for (int i = 0; i < Count; i++)
+            if (Data[i].Equals(item))
+                return i;
+        return -1;
+    }
+
+    public void Insert(int index, T item)
+    {
+        AssureSize(Count+1);
+        var trailingSize = (Count - index) * elementSize_;
+        Buffer.MemoryCopy(&Data[index], &Data[index + 1], trailingSize, trailingSize);
+        Data[index] = item;
+        Count++;
+    }
+
+    /// <summary>This is slow. Use RemoveAtFast() if you don't need stable order</summary>
+    public void RemoveAt(int index)
+    {
+        var trailingSize = (Count - index) * elementSize_;
+        Buffer.MemoryCopy(&Data[index + 1], &Data[index], trailingSize, trailingSize);
+        Count--;
+    }
+
+    /// <summary>Removes element at index without preserving order (very fast)</summary>
+    public void RemoveAtFast(int index)
+    {
+        Buffer.MemoryCopy(&Data[Count - 1], &Data[index], elementSize_, elementSize_);
+        Count--;
+    }
+
     public T this[int index]
     {
         set => Data[index] = value;
@@ -125,7 +163,7 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
     {
         return GetEnumerator();
     }
-    
+
     public unsafe void FastForeach(Action<T> loopAction)
     {
         for (int i = 0; i < Count; i++)
@@ -158,7 +196,14 @@ public unsafe class UnmanagedCollection<T> : ICollection<T>, IReadOnlyList<T>, I
 
     public bool Remove(T item)
     {
-        throw new NotImplementedException("The memory block doesn't currently shrink");
+        var index = IndexOf(item);
+        if (index < 0) return false;
+        RemoveAt(index); return true;
     }
 
+    public void TrimExcess()
+    {
+        //todo shrink buffer but not beyond a value that doesn't increase when multiplied by overflowMult_
+        throw new NotImplementedException();
+    }
 }
