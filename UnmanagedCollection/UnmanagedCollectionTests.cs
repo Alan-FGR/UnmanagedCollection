@@ -131,7 +131,7 @@ public static class UnmanagedCollectionTests
 
         //performance tests
         foreach (var warmup in new []{true,false})
-        for (int li = 0; li < 4; li++)
+        for (int li = 0; li < 14; li++)
         {
             GC.Collect();
             GC.WaitForPendingFinalizers();
@@ -189,9 +189,10 @@ public static class UnmanagedCollectionTests
 
             Measure($"For UnmanagedCollection", warmup, () =>
             {
-                for (var i = 0; i < ucPerf.Count; i++)
+                //nuint count = (nuint)ucPerf.Count;
+                for (nuint i = 0; i < ucPerf.ElementCount; i++)
                 {
-                    TestStruct e = ucPerf[(nuint)i];
+                    TestStruct e = ucPerf[i];
                     e.i++;
                 }
                 return ucPerf.Count;

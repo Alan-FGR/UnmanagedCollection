@@ -20,7 +20,7 @@ public unsafe class UnmanagedCollection<T> :
     public nuint DataSizeInBytes => allocatedSizeInElements_ * ElementSize;
     public nuint UsedSizeInBytes => ElementCount * ElementSize;
     public IntPtr DataIntPtr => (IntPtr)Data;
-    private nuint ElementSize => (nuint)Unsafe.SizeOf<T>();
+    public nuint ElementSize => (nuint)Unsafe.SizeOf<T>();
 
 #if UCIL
     // IList<T> getters
@@ -31,7 +31,6 @@ public unsafe class UnmanagedCollection<T> :
     // data members
     public T* Data { get; private set; }
     public nuint ElementCount { get; private set; }
-
 
     private nuint allocatedSizeInElements_;
 
@@ -51,14 +50,14 @@ public unsafe class UnmanagedCollection<T> :
             throw new ArithmeticException("Overflow multiplier doesn't increase size. Try increasing it.");
 
         overflowMult_ = overflowMult;
-        allocatedSizeInElements_ = startingBufferSize;
         alignment_ = alignment;
-        Data = Allocate(DataSizeInBytes);
+        Data = Allocate(startingBufferSize);
     }
 
-    private T* Allocate(nuint sizeInBytes)
+    private T* Allocate(nuint bufferSizeInElements)
     {
-        return (T*)NativeMemory.AlignedAlloc(sizeInBytes, alignment_);
+        allocatedSizeInElements_ = bufferSizeInElements;
+        return (T*)NativeMemory.AlignedAlloc(DataSizeInBytes, alignment_);
     }
 
     public void Dispose()
@@ -84,7 +83,7 @@ public unsafe class UnmanagedCollection<T> :
 
     public void AddRange(UnmanagedCollection<T> otherUnmanagedCollection)
     {
-        AssureSize(ElementCount + otherUnmanagedCollection.ElementCount);
+        EnsureSize(ElementCount + otherUnmanagedCollection.ElementCount);
 
         for (nuint i = 0; i < otherUnmanagedCollection.ElementCount; i++)
             Data[ElementCount + i] = otherUnmanagedCollection.Data[i];
@@ -94,7 +93,7 @@ public unsafe class UnmanagedCollection<T> :
 
     public void AddRange(IList<T> collection)
     {
-        AssureSize(ElementCount + (nuint)collection.Count);
+        EnsureSize(ElementCount + (nuint)collection.Count);
 
         for (nuint i = 0; i < (nuint)collection.Count; i++)
             Data[ElementCount + i] = collection[(int)i];
@@ -103,7 +102,7 @@ public unsafe class UnmanagedCollection<T> :
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void AssureSize(nuint sizeInElements)
+    private void EnsureSize(nuint sizeInElements)
     {
         if (sizeInElements > allocatedSizeInElements_)
         {
@@ -123,11 +122,11 @@ public unsafe class UnmanagedCollection<T> :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void GrowMemoryBlock(nuint newElementCount)
     {
-        var newDataSize = ElementSize * newElementCount;
-        var newData = Allocate(newDataSize);
-        Buffer.MemoryCopy(Data, newData, DataSizeInBytes, DataSizeInBytes);
-        NativeMemory.AlignedFree(Data);
-        allocatedSizeInElements_ = newElementCount;
+        var oldDataSize = DataSizeInBytes;
+        var oldData = Data;
+        var newData = Allocate(newElementCount);
+        Buffer.MemoryCopy(oldData, newData, oldDataSize, oldDataSize);
+        NativeMemory.AlignedFree(oldData);
         Data = newData;
     }
 
@@ -146,7 +145,7 @@ public unsafe class UnmanagedCollection<T> :
 
     public void Insert(nuint index, T item)
     {
-        AssureSize(ElementCount + 1);
+        EnsureSize(ElementCount + 1);
         var trailingSize = (ElementCount - index) * ElementSize;
         Buffer.MemoryCopy(&Data[index], &Data[index + 1], trailingSize, trailingSize);
         Data[index] = item;
@@ -192,7 +191,11 @@ public unsafe class UnmanagedCollection<T> :
         return GetEnumerator();
     }
 
-    public ref T this[nuint index] => ref Data[index];
+    public ref T this[nuint index]
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => ref Data[index];
+    }
 
     public unsafe void FastForeach(Action<T> loopAction)
     {
