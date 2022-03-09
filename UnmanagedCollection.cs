@@ -32,9 +32,7 @@ public unsafe class UnmanagedCollection<T> :
     public T* Data { get; private set; }
     public nuint ElementCount { get; private set; }
 
-#if DEBUG
-    readonly
-#endif
+
     private nuint allocatedSizeInElements_;
 
 #if DEBUG
@@ -129,7 +127,7 @@ public unsafe class UnmanagedCollection<T> :
         var newData = Allocate(newDataSize);
         Buffer.MemoryCopy(Data, newData, DataSizeInBytes, DataSizeInBytes);
         NativeMemory.AlignedFree(Data);
-        ElementCount = newElementCount;
+        allocatedSizeInElements_ = newElementCount;
         Data = newData;
     }
 
