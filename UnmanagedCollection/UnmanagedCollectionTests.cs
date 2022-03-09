@@ -191,7 +191,7 @@ public static class UnmanagedCollectionTests
             {
                 for (var i = 0; i < ucPerf.Count; i++)
                 {
-                    TestStruct e = ucPerf[i];
+                    TestStruct e = ucPerf[(nuint)i];
                     e.i++;
                 }
                 return ucPerf.Count;

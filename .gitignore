@@ -2,6 +2,6 @@
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
-/.vs/UnmanagedCollection/v15
+/.vs/UnmanagedCollection
 /UnmanagedCollection/bin
 /UnmanagedCollection/obj

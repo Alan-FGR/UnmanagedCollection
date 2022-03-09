@@ -1,90 +1,113 @@
-﻿using System;
+﻿#if UNMANAGED_COLLECTION_IMPL_ILIST
+#define UCIL
+#endif
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-public unsafe class UnmanagedCollection<T> : IList<T>, IDisposable where T : unmanaged
+
+public unsafe class UnmanagedCollection<T> :
+#if UCIL
+    IList<T>,
+#else
+    IEnumerable<T>,
+#endif
+    IDisposable where T : unmanaged
 {
     // public getters
-    public bool IsReadOnly => false;
-    public int DataSizeInBytes => dataSizeInElements_ * elementSize_;
-    public int UsedSizeInBytes => Count * elementSize_;
-
-    // public getter with setter
-    public T* Data { get; private set; }
+    public nuint DataSizeInBytes => allocatedSizeInElements_ * ElementSize;
+    public nuint UsedSizeInBytes => ElementCount * ElementSize;
     public IntPtr DataIntPtr => (IntPtr)Data;
-    public int Count { get; private set; } = 0;
+    private nuint ElementSize => (nuint)Unsafe.SizeOf<T>();
 
-    // private fields
-    private int dataSizeInElements_;
+#if UCIL
+    // IList<T> getters
+    public bool IsReadOnly => false;
+#endif
+    public int Count => (int)ElementCount;
 
-    // readonly fields
-    #if DEBUG
+    // data members
+    public T* Data { get; private set; }
+    public nuint ElementCount { get; private set; }
+
+#if DEBUG
     readonly
-        #endif
-        private float overflowMult_;
-    #if DEBUG
-    readonly
-        #endif
-        private int elementSize_;
+#endif
+    private nuint allocatedSizeInElements_;
 
-    public UnmanagedCollection(int startingBufferSize = 8, float overflowMult = 1.5f)
+#if DEBUG
+    readonly
+#endif
+    private float overflowMult_;
+
+#if DEBUG
+    readonly
+#endif
+    private nuint alignment_;
+
+    public UnmanagedCollection(nuint startingBufferSize = 8, float overflowMult = 1.5f, nuint alignment = 128)
     {
-        if ((int)(startingBufferSize * overflowMult) <= startingBufferSize)
+        if ((startingBufferSize * overflowMult) <= startingBufferSize)
             throw new ArithmeticException("Overflow multiplier doesn't increase size. Try increasing it.");
 
         overflowMult_ = overflowMult;
-        elementSize_ = sizeof(T);
-        dataSizeInElements_ = startingBufferSize;
-        Data = (T*)Marshal.AllocHGlobal(DataSizeInBytes);
+        allocatedSizeInElements_ = startingBufferSize;
+        alignment_ = alignment;
+        Data = Allocate(DataSizeInBytes);
+    }
+
+    private T* Allocate(nuint sizeInBytes)
+    {
+        return (T*)NativeMemory.AlignedAlloc(sizeInBytes, alignment_);
     }
 
     public void Dispose()
     {
-        Marshal.FreeHGlobal((IntPtr)Data);
+        NativeMemory.AlignedFree(Data);
         GC.SuppressFinalize(this);
     }
 
     ~UnmanagedCollection()
     {
-        Marshal.FreeHGlobal((IntPtr)Data);
+        NativeMemory.AlignedFree(Data);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(T item)
     {
-        if (Count + 1 > dataSizeInElements_)
+        if (ElementCount + 1 > allocatedSizeInElements_)
             GrowMemoryBlock(GetNextBlockSize());
 
-        Data[Count] = item;
-        Count++;
+        Data[ElementCount] = item;
+        ElementCount++;
     }
 
-    public void AddRange(UnmanagedCollection<T> unmanagedCollection)
+    public void AddRange(UnmanagedCollection<T> otherUnmanagedCollection)
     {
-        AssureSize(Count + unmanagedCollection.Count);
+        AssureSize(ElementCount + otherUnmanagedCollection.ElementCount);
 
-        for (int i = 0; i < unmanagedCollection.Count; i++)
-            Data[Count + i] = unmanagedCollection.Data[i];
+        for (nuint i = 0; i < otherUnmanagedCollection.ElementCount; i++)
+            Data[ElementCount + i] = otherUnmanagedCollection.Data[i];
 
-        Count += unmanagedCollection.Count;
+        ElementCount += otherUnmanagedCollection.ElementCount;
     }
 
     public void AddRange(IList<T> collection)
     {
-        AssureSize(Count + collection.Count);
+        AssureSize(ElementCount + (nuint)collection.Count);
 
-        for (int i = 0; i < collection.Count; i++)
-            Data[Count + i] = collection[i];
+        for (nuint i = 0; i < (nuint)collection.Count; i++)
+            Data[ElementCount + i] = collection[(int)i];
 
-        Count += collection.Count;
+        ElementCount += (nuint)collection.Count;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void AssureSize(int sizeInElements)
+    private void AssureSize(nuint sizeInElements)
     {
-        if (sizeInElements > dataSizeInElements_)
+        if (sizeInElements > allocatedSizeInElements_)
         {
             var nextAccomodatingSize = GetNextBlockSize();
             while (nextAccomodatingSize < sizeInElements)
@@ -94,68 +117,74 @@ public unsafe class UnmanagedCollection<T> : IList<T>, IDisposable where T : unm
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private int GetNextBlockSize()
+    private nuint GetNextBlockSize()
     {
-        return (int)(dataSizeInElements_ * overflowMult_);
+        return (nuint)(allocatedSizeInElements_ * overflowMult_);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void GrowMemoryBlock(int newElementCount)
+    private void GrowMemoryBlock(nuint newElementCount)
     {
-        var newDataSize = elementSize_ * newElementCount;
-        var newData = (T*)Marshal.AllocHGlobal(newDataSize);
+        var newDataSize = ElementSize * newElementCount;
+        var newData = Allocate(newDataSize);
         Buffer.MemoryCopy(Data, newData, DataSizeInBytes, DataSizeInBytes);
-        Marshal.FreeHGlobal((IntPtr)Data);
-        dataSizeInElements_ = newElementCount;
+        NativeMemory.AlignedFree(Data);
+        ElementCount = newElementCount;
         Data = newData;
     }
 
     public void Clear()
     {
-        Count = 0;
+        ElementCount = 0;
     }
 
-    public int IndexOf(T item)
+    public nuint IndexOf(T item)
     {
-        for (int i = 0; i < Count; i++)
+        for (nuint i = 0; i < ElementCount; i++)
             if (Data[i].Equals(item))
                 return i;
-        return -1;
+        throw new ArgumentOutOfRangeException("Element not found in collection");
     }
 
-    public void Insert(int index, T item)
+    public void Insert(nuint index, T item)
     {
-        AssureSize(Count+1);
-        var trailingSize = (Count - index) * elementSize_;
+        AssureSize(ElementCount + 1);
+        var trailingSize = (ElementCount - index) * ElementSize;
         Buffer.MemoryCopy(&Data[index], &Data[index + 1], trailingSize, trailingSize);
         Data[index] = item;
-        Count++;
+        ElementCount++;
     }
 
-    /// <summary>This is slow. Use RemoveAtFast() if you don't need stable order</summary>
-    public void RemoveAt(int index)
+#if UCIL
+    public void Insert(int index, T item)
     {
-        var trailingSize = (Count - index) * elementSize_;
+        AssureSize(ElementCount + 1);
+        var trailingSize = (ElementCount - (nuint)index) * ElementSize;
+        Buffer.MemoryCopy(&Data[index], &Data[index + 1], trailingSize, trailingSize);
+        Data[index] = item;
+        ElementCount++;
+    }
+#endif
+
+    /// <summary>This is slow. Use RemoveAtFast() if you don't need stable order</summary>
+    public void RemoveAt(nuint index)
+    {
+        var trailingSize = (ElementCount - index) * ElementSize;
         Buffer.MemoryCopy(&Data[index + 1], &Data[index], trailingSize, trailingSize);
-        Count--;
+        ElementCount--;
     }
 
     /// <summary>Removes element at index without preserving order (very fast)</summary>
-    public void RemoveAtFast(int index)
+    public void RemoveAtFast(nuint index)
     {
-        Buffer.MemoryCopy(&Data[Count - 1], &Data[index], elementSize_, elementSize_);
-        Count--;
+        Buffer.MemoryCopy(&Data[ElementCount - 1], &Data[index], ElementSize, ElementSize);
+        ElementCount--;
     }
 
-    public T this[int index]
-    {
-        set => Data[index] = value;
-        get => Data[index];
-    }
-
+    // IEnumerable<T>
     public IEnumerator<T> GetEnumerator()
     {
-        for (int i = 0; i < Count; i++)
+        for (nuint i = 0; i < ElementCount; i++)
             yield return this[i];
     }
 
@@ -164,26 +193,28 @@ public unsafe class UnmanagedCollection<T> : IList<T>, IDisposable where T : unm
         return GetEnumerator();
     }
 
+    public ref T this[nuint index] => ref Data[index];
+
     public unsafe void FastForeach(Action<T> loopAction)
     {
-        for (int i = 0; i < Count; i++)
+        for (nuint i = 0; i < ElementCount; i++)
             loopAction(Data[i]);
     }
 
     public bool Contains(T item)
     {
-        for (int i = 0; i < Count; i++)
+        for (nuint i = 0; i < ElementCount; i++)
             if (Data[i].Equals(item))
                 return true;
         return false;
     }
 
-    public void CopyTo(T[] array, int arrayIndex)
+    public void CopyTo(T[] array, nuint startPositionInTargetArray = 0)
     {
-        if (arrayIndex + Count > array.Length)
-            throw new IndexOutOfRangeException("Array to copy to doesn't have enough space");
+        if (startPositionInTargetArray + ElementCount > (nuint)array.Length)
+            throw new IndexOutOfRangeException("Array to copy into doesn't have enough space");
 
-        fixed (T* manArrDataPtr = &array[arrayIndex])
+        fixed (T* manArrDataPtr = &array[startPositionInTargetArray])
         {
             Buffer.MemoryCopy(Data, manArrDataPtr, UsedSizeInBytes, UsedSizeInBytes);
         }
@@ -194,11 +225,10 @@ public unsafe class UnmanagedCollection<T> : IList<T>, IDisposable where T : unm
         Buffer.MemoryCopy(Data, (void*)memAddr, UsedSizeInBytes, UsedSizeInBytes);
     }
 
-    public bool Remove(T item)
+    public void Remove(T item)
     {
         var index = IndexOf(item);
-        if (index < 0) return false;
-        RemoveAt(index); return true;
+        RemoveAt(index);
     }
 
     public void TrimExcess()
