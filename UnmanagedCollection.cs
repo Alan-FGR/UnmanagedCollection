@@ -182,6 +182,7 @@ public unsafe class UnmanagedCollection<T> :
     // IEnumerable<T>
     public IEnumerator<T> GetEnumerator()
     {
+        //TODO there's a performance regression from netstandard2.0
         for (nuint i = 0; i < ElementCount; i++)
             yield return this[i];
     }
